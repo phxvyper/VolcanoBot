@@ -256,6 +256,14 @@ func createCommand(prefixStr string, aliasList []string, description string, hel
 func registerCommands() {
 	createCommand("test", nil, "prints \"testing!\"", "", "", testCommandFunction);
 
+	/*
+	prefix = the main command
+	aliases = a string array of alternate commands that do the same thing
+	description = what the command does
+	help = all of the arguments. [] = optional, <> = required
+	role = the minimum required role to use this command. Blank = no requirement
+	func = the function called
+	*/
 	createCommand(
 		"help",
 		[]string{"?"},
