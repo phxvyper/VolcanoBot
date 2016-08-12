@@ -16,6 +16,7 @@ type CommandFunction func(*discordgo.Session, *discordgo.MessageCreate, string, 
 type Command struct {
 	prefix string
 	aliases []string
+	description string
 	help string
 	role string
 	calledFunc CommandFunction
@@ -69,15 +70,19 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 
 		for _,element := range commands {
 			if (element.prefix == cmd || stringInSlice(cmd, element.aliases)) {
-				if (!stringInSlice(element.role, getRolesFromMessage(message))) {
+
+				if (!userCanUseCommand(session, message, element.role)) {
 					session.ChannelMessageSend(message.ChannelID, "You do not have permission to use this command");
 					return;
 				}
+
 				err := element.calledFunc(session, message, cmd, args);
 
 				if (err != nil) {
 					if (err.Error() == "invalid args") {
-						session.ChannelMessageSend(message.ChannelID, strcat("Invalid arguments passed\n", element.help));
+						//session.ChannelMessageSend(message.ChannelID, strcat("Invalid arguments passed\n", element.help));
+						session.ChannelMessageSend(message.ChannelID, strcat("Invalid arguments passed\n"));
+						printHelp(session, message, element);
 					} else {
 						session.ChannelMessageSend(message.ChannelID, err.Error());
 					}
@@ -141,19 +146,89 @@ func spliceCommand(cmd string) (string, []string) {
 	return args[0], args[1:];
 }
 
-func getRolesFromMessage(session *discordgo.Session, message *discordgo.MessageCreate) []string {
+func getRolesFromMessage(session *discordgo.Session, message *discordgo.MessageCreate) ([]*discordgo.Role, *discordgo.Guild) {
 	ch, err_ch := session.Channel(message.ChannelID);
-	member, err_m := session.GuildMember(ch, message.Author.ID);
+	member, err_m := session.GuildMember(ch.GuildID, message.Author.ID);
 
-	return member.Roles;
+	if (err_ch != nil || err_m != nil) {
+		return nil, nil;
+	}
+
+	var roles []*discordgo.Role;
+
+	for _,role := range member.Roles {
+		r, err_r := session.State.Role(ch.GuildID, role);
+		if (err_r != nil) {
+			return nil, nil;
+		}
+
+		roles = append(roles, r);
+	}
+
+	guild, err_guild := session.State.Guild(ch.GuildID);
+
+	if (err_guild != nil) {
+		return nil, nil;
+	}
+
+	return roles, guild;
+}
+
+func userCanUseCommand(session *discordgo.Session, message *discordgo.MessageCreate, role string) bool {
+
+	if (role == "") {
+		return true;
+	}
+
+	userRoles, userGuild := getRolesFromMessage(session, message);
+
+	if (userRoles != nil) {
+
+		for _,userRole := range userRoles {
+			for _,guildRole := range userGuild.Roles {
+				if (guildRole.Name == role && userRole.Position >= guildRole.Position) {
+					return true;
+				}
+			}
+		}
+
+	}
+
+	return false;
+}
+
+func printHelp(session *discordgo.Session, message *discordgo.MessageCreate, cmd Command) {
+
+	aliases := "";
+	requires := "";
+
+	if (cmd.aliases != nil && len(cmd.aliases) > 0) {
+		aliases = "aliases: ";
+	}
+
+	for index,alias := range cmd.aliases {
+
+		aliases += alias;
+
+		if (index != len(cmd.aliases) - 1) {
+			aliases += ", ";
+		} else {
+			aliases += "\n";
+		}
+	}
+
+	if (cmd.role != "") {
+		requires = "\nrequires: " + cmd.role + " or higher\n"
+	}
+
+	session.ChannelMessageSend(message.ChannelID, strcat("\n```yaml\n", cmdPrefix, cmd.prefix, " ", cmd.help, "\n", aliases, "-    ", cmd.description, requires, "```"));
 }
 
 // Command generation
-func createCommand(prefixStr string, aliasList []string, helpStr string, role string, callFunc CommandFunction) error {
+func createCommand(prefixStr string, aliasList []string, description string, help string, role string, callFunc CommandFunction) error {
 
 	pref := strings.ToLower(prefixStr);
 	var aliases []string;
-	help := strings.ToLower(helpStr);
 
 	for _,element := range aliasList {
 		aliases = append(aliases, strings.ToLower(element));
@@ -172,23 +247,55 @@ func createCommand(prefixStr string, aliasList []string, helpStr string, role st
 		}
 	}
 
-	commands = append(commands, Command{pref, aliases, help, role, callFunc});
+	commands = append(commands, Command{pref, aliases, description, help, role, callFunc});
 
 	return nil;
 }
 
 // Register commands here
 func registerCommands() {
-	createCommand("test", []string{"test"}, strcat(cmdPrefix, "test\n- prints \"testing!\""), "Cancer", testCommandFunction);
+	createCommand("test", nil, "prints \"testing!\"", "", "", testCommandFunction);
 
-	createCommand("permissions",
-		[]string{"perms"},
-		strcat(cmdPrefix, "permissions\n- prints \"the permissions of the user who sent the command.\""),
-		"Owner",
-		showUserPermissions);
+	createCommand(
+		"help",
+		[]string{"?"},
+		"prints help info provided by a command, or lists all commands.",
+		"[cmd]",
+		"",
+		helpCommand);
 }
 
 // Command functions go down here (events that occur when a function is called)
+func helpCommand(session *discordgo.Session, message *discordgo.MessageCreate, cmd string, args []string) error {
+
+	if (len(args) < 1) {
+		info := "\n```yaml\nCommands:\n";
+
+		for _,item := range commands {
+			info += strcat("	", item.prefix, " ", item.help, ": ", item.description, "\n");
+		}
+
+		info += "\n```";
+
+		session.ChannelMessageSend(message.ChannelID, info);
+
+		return nil;
+
+	} else {
+		for _,item := range commands {
+			if (item.prefix == strings.ToLower(args[0]) || stringInSlice(strings.ToLower(args[0]), item.aliases)) {
+				//session.ChannelMessageSend(message.ChannelID, strcat(args[0], " help:\n", item.help));
+
+				printHelp(session, message, item);
+
+				return nil;
+			}
+		}
+	}
+
+	return nil;
+}
+
 func testCommandFunction(session *discordgo.Session, message *discordgo.MessageCreate, cmd string, args []string) error {
 	session.ChannelMessageSend(message.ChannelID, "testing!");
 
