@@ -221,7 +221,7 @@ func printHelp(session *discordgo.Session, message *discordgo.MessageCreate, cmd
 		requires = "\nrequires: " + cmd.role + " or higher\n"
 	}
 
-	session.ChannelMessageSend(message.ChannelID, strcat("\n```yaml\n", cmdPrefix, cmd.prefix, " ", cmd.help, "\n", aliases, "-    ", cmd.description, requires, "```"));
+	session.ChannelMessageSend(message.ChannelID, strcat("\n```xl\n", cmdPrefix, cmd.prefix, " ", cmd.help, "\n", aliases, "-    ", cmd.description, requires, "```"));
 }
 
 // Command generation
@@ -269,7 +269,7 @@ func registerCommands() {
 func helpCommand(session *discordgo.Session, message *discordgo.MessageCreate, cmd string, args []string) error {
 
 	if (len(args) < 1) {
-		info := "\n```yaml\nCommands:\n";
+		info := "\n```xl\nCommands:\n";
 
 		for _,item := range commands {
 			info += strcat("	", item.prefix, " ", item.help, ": ", item.description, "\n");
