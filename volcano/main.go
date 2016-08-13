@@ -277,7 +277,7 @@ func registerCommands() {
     // Show Channel ID command.
     createCommand(
         "cid",
-        [1]string{"channelid"},
+        []string{"channelid"},
         "Prints the ID of the channel the command was sent in.",
         "[cmd]",
         "",
