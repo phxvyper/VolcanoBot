@@ -6,6 +6,7 @@
 # Folders
 _obj
 _test
+temp
 
 # Architecture specific extensions/prefixes
 *.[568vq]
@@ -18,6 +19,8 @@ _cgo_gotypes.go
 _cgo_export.*
 
 _testmain.go
+
+debug.*
 
 *.exe
 *.test
