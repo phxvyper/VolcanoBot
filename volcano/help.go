@@ -11,7 +11,7 @@ func registerHelp() {
 	createCommand(
 		"help",
 		[]string{"?"},
-		"prints help info provided by a command, or lists all commands.",
+		"prints help info about [cmd], or shows all commands.",
 		"[cmd]",
 		"",
 		helpCommand);
@@ -23,7 +23,7 @@ func helpCommand(session *discordgo.Session, message *discordgo.MessageCreate, c
 		info := "\n```xl\nCommands:\n";
 
 		for _,item := range commands {
-			info += strcat("	", item.prefix, " ", item.help, ": ", item.description, "\n");
+			info += "	" + cmdPrefix + item.prefix + " " + item.help + ": " + item.description + "\n\n";
 		}
 
 		info += "\n```";
