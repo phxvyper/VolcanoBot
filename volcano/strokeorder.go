@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"strconv"
+	"time"
 
 	"archive/zip"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 
 var (
 	fileNameLength = 5;
+	zipReader *zip.ReadCloser;
 )
 
 func registerStrokeOrder() {
@@ -31,6 +33,18 @@ func registerStrokeOrder() {
 	if (err != nil) {
 		fmt.Println(err);
 	}
+
+	zipReader, err = zip.OpenReader("data/kanji.zip");
+
+	if (err != nil) {
+		fmt.Println(err);
+	}
+
+	deferCallback(closeZipReader);
+}
+
+func closeZipReader() {
+	zipReader.Close();
 }
 
 func isKanji(unicode string) bool {
@@ -50,12 +64,7 @@ func strokeOrderCommand(session *discordgo.Session, message *discordgo.MessageCr
 
 	printDebug("Opening kanji.zip to search for the kanji '" + args[0] + "'");
 
-	reader, err := zip.OpenReader("data/kanji.zip");
-	if (err != nil) {
-		printDebug("Unable to open kanji.zip:\n" + err.Error());
-		return err;
-	}
-	defer reader.Close();
+	time0 := time.Now();
 
 	for pos,char := range args[0] {
 		if (pos == 0) {
@@ -79,7 +88,7 @@ func strokeOrderCommand(session *discordgo.Session, message *discordgo.MessageCr
 			printDebug("Searching for kanji '" + args[0] + "' (" + kanjiFileName + ")");
 			msg,_ := session.ChannelMessageSend(message.ChannelID, "Looking for that kanji, ちょっと待ってください。。。");
 
-			for _, f := range reader.File {
+			for _, f := range zipReader.File {
 				if (f.Name == kanjiFileName + ".svg") {
 
 					printDebug("Kanji found!");
@@ -113,7 +122,7 @@ func strokeOrderCommand(session *discordgo.Session, message *discordgo.MessageCr
 						os.Remove("data/temp/kanji.svg");
 					}
 
-					cmd := exec.Command("inkscape", "-z", "-e", "data/temp/kanji.png", "-w 1024", "-h 1024", "data/temp/kanji.svg");
+					cmd := exec.Command("inkscape", "-z", "-e", "data/temp/kanji.png", "-w 870", "-h 870", "data/temp/kanji.svg");
 					err = cmd.Run();
 					if (err != nil) {
 						printDebug(err.Error());
@@ -126,9 +135,13 @@ func strokeOrderCommand(session *discordgo.Session, message *discordgo.MessageCr
 						return err;
 					}
 
-					session.ChannelMessageSend(message.ChannelID, "どうぞ！");
+					session.ChannelMessageEdit(message.ChannelID, msg.ID, "どうぞ！");
 					_,err = session.ChannelFileSend(message.ChannelID, "kanji.png", png);
-					session.ChannelMessageDelete(message.ChannelID, msg.ID);
+
+					time1 := time.Now();
+					duration := time1.Sub(time0);
+
+					printDebug("It took " + strconv.FormatFloat(duration.Seconds(), 'f', -1, 64) + " seconds to grab find that kanji and upload it.");
 
 					return nil;
 				}
