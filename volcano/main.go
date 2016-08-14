@@ -6,7 +6,6 @@ import (
     "fmt"
     "flag"
     "strings"
-    "strconv"
     "syscall"
 
     "github.com/bwmarrin/discordgo"
@@ -14,6 +13,7 @@ import (
 )
 
 type CommandFunction func(*discordgo.Session, *discordgo.MessageCreate, string, []string) error;
+type CallbackFunction func();
 
 type Command struct {
     prefix string
@@ -23,6 +23,8 @@ type Command struct {
     role string
     calledFunc CommandFunction
 };
+
+var defaultCmdPrefix = ">";
 
 var (
     commands []Command;
@@ -41,17 +43,19 @@ var (
 
     user32, _ = syscall.LoadLibrary("user32.dll");
     messageBox, _ = syscall.GetProcAddress(user32, "MessageBoxW");
+
+    deferredCallbacks []CallbackFunction;
 )
 
 func init() {
     flag.StringVar(&uname, "u", "", "Account Username");
     flag.StringVar(&pword, "p", "", "Account Password");
-    flag.StringVar(&cmdPrefix, "f", ">", "Command Prefix");
+    flag.StringVar(&cmdPrefix, "c", defaultCmdPrefix, "Command Prefix");
     flag.BoolVar(&debug, "d", false, "Debug Mode");
     
     flag.StringVar(&uname, "username", "", "Account Username");
     flag.StringVar(&pword, "password", "", "Account Username");
-    flag.StringVar(&cmdPrefix, "prefix", "", "Account Username");
+    flag.StringVar(&cmdPrefix, "cmdprefix", defaultCmdPrefix, "Account Username");
     flag.BoolVar(&debug, "debug", false, "Debug Mode");
 
     flag.Parse();
@@ -71,6 +75,10 @@ func main() {
         return;
     }
 
+    printDebug("DEBUG MODE");
+
+    printDebug("Logging into: " + uname + "\n        Using command prefix: '" + cmdPrefix + "'");
+
     // Discord sessions init
     dg, err := discordgo.New(uname, pword);
     if (err != nil) {
@@ -88,6 +96,11 @@ func main() {
     fmt.Println("Volcano is now running. Press Ctrl-C to exit.");
     // Ctrl+C to quit
     <-make(chan struct{});
+
+    for _,callback := range deferredCallbacks {
+        callback();
+    }
+
     return;
 }
 
@@ -150,7 +163,7 @@ func strcat(a string, b ...string) string {
     return buffer.String();
 }
 
-func spliceCommand(cmd string) (string, []string) {
+func spliceCommand(cmd string) (prefix string, arguments []string) {
     var args []string;
 
     inDelim := false;
@@ -177,7 +190,12 @@ func spliceCommand(cmd string) (string, []string) {
         }
     }
 
-    return args[0], args[1:];
+    if (len(args) > 1) {
+        arguments = args[1:];
+    }
+
+    prefix = args[0];
+    return;
 }
 
 func getRolesFromMessage(session *discordgo.Session, message *discordgo.MessageCreate) ([]*discordgo.Role, *discordgo.Guild) {
@@ -228,6 +246,10 @@ func userCanUseCommand(session *discordgo.Session, message *discordgo.MessageCre
     }
 
     return false;
+}
+
+func deferCallback(callback CallbackFunction) {
+    deferredCallbacks = append(deferredCallbacks, callback);
 }
 
 func printHelp(session *discordgo.Session, message *discordgo.MessageCreate, cmd Command, reason string) {
@@ -304,7 +326,7 @@ func createCommand(prefixStr string, aliasList []string, description string, hel
 func printDebug(text string) {
     if (debug) {
         ct.ChangeColor(ct.Yellow, true, ct.Black, false);
-        fmt.Println("[debug] " + text + "\n");  
+        fmt.Println("[debug] " + text + "\n");
         ct.ResetColor();
     }
 }
@@ -316,6 +338,7 @@ func registerCommands() {
 
     registerHelp();
     registerStrokeOrder();
+    registerJisho();
 
     if (debug) {
         registerTest(); 
